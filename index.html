@@ -172,16 +172,22 @@ body {
         <button class="button" onclick="playClickSound1(); goToNextStep(12)">2. 집에 갈래요.</button>
     </div>
 
-    <!-- Step 3 -->
-    <div id="step3" class="step">
-    <h1>~여행자님의 정보를 적어주세요~</h1>
-    <p>입학식에 앞서 준비할 것이 있습니다.<br>
-    여행자님에 대해 알려주세요.</p>
-    <input type="text" id="name" class="input-field" placeholder="이름을 입력하세요" required>
-    <input type="date" id="birthdate" class="input-field" placeholder="생년월일을 입력하세요" required>
-    <input type="text" id="dayMaster" class="input-field" placeholder="일간을 입력하세요 (예: 갑목, 병화)" required>
-    <p><a href="https://pro.forceteller.com/profile/edit" target="_target">나의 일간을 알고 싶다면</a></p>
-    <button class="button" onclick="playClickSound1(); saveNameAndGoToNextStep(4)">다 적었어요.</button>
+    <!-- Step 3 (교체용) -->
+<div id="step3" class="step">
+  <h1>~여행자님의 정보를 적어주세요~</h1>
+  <p>입학식에 앞서 준비할 것이 있습니다.<br>
+  여행자님에 대해 알려주세요.</p>
+
+  <input type="text" id="name" class="input-field" placeholder="이름을 입력하세요" required>
+  <input type="date" id="birthdate" class="input-field" placeholder="생년월일을 입력하세요" required>
+
+  <!-- 내부 처리용(숨김) : 기존 saveNameAndGoToNextStep()에서 필요하므로 유지 -->
+  <input type="hidden" id="dayMaster" value="">
+
+  <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+    <!-- 자동추출 버튼(이 버튼 하나만 남김) -->
+    <button id="autoExtractBtn" class="button" type="button">다 입력했어요</button>
+  </div>
 </div>
 
     <!-- Step 4 -->
@@ -537,75 +543,55 @@ function restart() {
 function closePage() {
     window.close();
 }
-<script>
 document.addEventListener('DOMContentLoaded', () => {
-  // 1) 계산용: JDN -> 일간(간지) -> 한글 간(갑,을...)
-  const stemHangul = ['갑','을','병','정','무','기','경','신','임','계'];
+  // 안전: HTML에 넣어둔 버튼 하나만 사용
+  const btn = document.getElementById('autoExtractBtn');
+  if (!btn) return;
 
-  function jdnFromGregorian(y, m, d) {
-    const a = Math.floor((14 - m) / 12);
-    const y2 = y + 4800 - a;
-    const m2 = m + 12 * a - 3;
-    return d + Math.floor((153 * m2 + 2) / 5) + 365 * y2 + Math.floor(y2 / 4) - Math.floor(y2 / 100) + Math.floor(y2 / 400) - 32045;
-  }
-  function getDayStemHangul(y,m,d){
-    const jdn = jdnFromGregorian(y,m,d);
-    const idx0 = ((jdn - 11) % 60 + 60) % 60; // 0 -> 甲子
-    const stemIdx = idx0 % 10;
-    return stemHangul[stemIdx];
-  }
+  // 중복 바인딩 방지
+  if (btn.dataset.yuldoRegistered) return;
+  btn.dataset.yuldoRegistered = '1';
 
-  // 2) Step3의 입력 밑에 '일간 자동추출' 버튼 추가 (있으면 생성하지 않음)
-  const step3 = document.getElementById('step3');
-  if (step3) {
-    // 위치: dayMaster 입력 바로 아래에 버튼 넣기
-    const dayMasterInput = document.getElementById('dayMaster');
-    if (dayMasterInput && !document.getElementById('autoAssignBtn')) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = 'autoAssignBtn';
-      btn.className = 'button';
-      btn.style.marginLeft = '8px';
-      btn.textContent = '일간 자동추출';
-      // insert after dayMaster input
-      dayMasterInput.parentNode.insertBefore(btn, dayMasterInput.nextSibling);
+  btn.addEventListener('click', () => {
+    const dateVal = document.getElementById('birthdate')?.value;
+    if (!dateVal) { alert('생년월일(양력)을 입력해 주세요.'); return; }
+    const [yy, mm, dd] = dateVal.split('-').map(v => parseInt(v,10));
+    if (!yy || !mm || !dd) { alert('정확한 생년월일을 입력해 주세요.'); return; }
 
-      btn.addEventListener('click', () => {
-        const dateVal = document.getElementById('birthdate').value;
-        if (!dateVal) {
-          alert('생년월일(양력)을 입력해 주세요.');
-          return;
-        }
-        const [yy, mm, dd] = dateVal.split('-').map(v => parseInt(v,10));
-        const stem = getDayStemHangul(yy, mm, dd); // '갑' 등
-        // 3) 자동으로 dayMaster를 채우고 기존 저장/다음 단계 함수 호출
-        const dayMasterField = document.getElementById('dayMaster');
-        if (dayMasterField) {
-          dayMasterField.value = stem; // 기존 코드에서는 첫 글자만 사용하므로 '갑'이면 충분
-        }
-        // (선택) 자동으로 이름이 비어있으면 '여행자'로 채움 — 기존 saveNameAndGoToNextStep() 내부 로직과 호환
-        const nameField = document.getElementById('name');
-        if (nameField && nameField.value.trim() === '') {
-          nameField.value = '여행자';
-        }
-        // 4) 기존 함수로 처리: 기숙사 배정 및 다음 단계로 이동
-        // saveNameAndGoToNextStep() 는 이미 페이지에 정의되어 있으므로 호출하면 됨
+    // JDN -> 한글 일간
+    const jdnFromGregorian = (y,m,d) => {
+      const a = Math.floor((14 - m) / 12);
+      const y2 = y + 4800 - a;
+      const m2 = m + 12 * a - 3;
+      return d + Math.floor((153 * m2 + 2) / 5) + 365 * y2 + Math.floor(y2 / 4)
+             - Math.floor(y2 / 100) + Math.floor(y2 / 400) - 32045;
+    };
+    const stemHangul = ['갑','을','병','정','무','기','경','신','임','계'];
+    const idx0 = ((jdnFromGregorian(yy,mm,dd) - 11) % 60 + 60) % 60;
+    const stem = stemHangul[idx0 % 10];
+
+    // 숨김 필드 채우고 이름 기본값 처리
+    const dayMasterField = document.getElementById('dayMaster');
+    if (dayMasterField) dayMasterField.value = stem;
+    const nameField = document.getElementById('name');
+    if (nameField && nameField.value.trim() === '') nameField.value = '여행자';
+
+    // 효과음 + 기존 흐름 호출
+    try { playClickSound1(); } catch(e){}
+    setTimeout(() => {
+      try {
+        saveNameAndGoToNextStep();
+      } catch (err) {
+        console.error('자동 제출 실패:', err);
+        // 폴백: 미리보기 알림
         try {
-          saveNameAndGoToNextStep();
-        } catch (e) {
-          // 안전장치: 함수가 없으면 대신 getAssignedDorm으로 결과만 보여줌
-          console.error('saveNameAndGoToNextStep 호출 실패:', e);
-          // 간단히 기숙사 미리보기 표시
           const assigned = getAssignedDorm(stem);
-          if (assigned) {
-            alert(`일간: ${stem}\n예상 배정 기숙사: ${assigned.name}`);
-          } else {
-            alert(`일간: ${stem}\n기숙사 매핑이 없습니다.`);
-          }
-        }
-      });
-    }
-  }
+          if (assigned) alert(`일간: ${stem}\n예상 배정 기숙사: ${assigned.name}`);
+          else alert(`일간: ${stem}\n기숙사 매핑이 없습니다.`);
+        } catch(e2){ console.error(e2); alert('자동 배정 처리 실패. 콘솔 확인.'); }
+      }
+    }, 120);
+  });
 });
 </script>
 
